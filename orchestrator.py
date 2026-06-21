@@ -15,7 +15,7 @@ from google.genai import types
 
 import config
 from tools.deliver import approve_and_publish
-from tools.search import search_alcohol_news
+from tools.search import fetch_full, search_alcohol_news
 from tools.summarize import compose_fb_post, summarize_articles
 
 _ROOT = Path(__file__).resolve().parent
@@ -148,10 +148,14 @@ def _dispatch(name: str, args: dict, state: State) -> str:
         if not (0 <= idx < len(state.summaries)):
             return json.dumps({"error": "chosen_index out of range"}, ensure_ascii=False)
         story = state.summaries[idx]
+        # Fetch full page text for the chosen story only (credit-efficient) so
+        # the Facebook post is written from rich content, not just the snippet.
+        full = fetch_full(story.get("url", ""))
+        story_for_post = {**story, "content": full} if full else story
         briefing = {
             "story": story,
             "headline": args.get("headline", ""),
-            "fb_post": compose_fb_post(story),
+            "fb_post": compose_fb_post(story_for_post),
             "editor_note": args.get("editor_note", ""),
             "region": state.region,
         }

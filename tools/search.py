@@ -96,11 +96,10 @@ def _queries_for(profile: str) -> tuple[list[str], list[str]]:
 
 def _search_one(client: TavilyClient, query: str, kind: str,
                 topic: str, days: int | None) -> list[dict]:
-    # topic="news" → carries published_date + recency-constrained (intl/thai);
-    # topic="general" → evergreen results for awareness topics (funeral).
-    params = dict(query=query, search_depth="advanced", topic=topic,
-                  max_results=config.MAX_RESULTS_PER_QUERY,
-                  include_raw_content=True)
+    # Credit-saving: basic search + snippets only (no per-result raw_content).
+    # Full page text is fetched once, for the chosen story, via fetch_full().
+    params = dict(query=query, search_depth="basic", topic=topic,
+                  max_results=config.MAX_RESULTS_PER_QUERY)
     if days is not None:
         params["days"] = days
     try:
@@ -111,14 +110,11 @@ def _search_one(client: TavilyClient, query: str, kind: str,
 
     out = []
     for r in resp.get("results", []):
-        # Prefer the full page text (raw_content); fall back to the snippet.
-        raw = (r.get("raw_content") or "").strip()
-        snippet = (r.get("content") or "").strip()
         out.append(
             {
                 "title": r.get("title", "").strip(),
                 "url": r.get("url", "").strip(),
-                "content": raw or snippet,
+                "content": (r.get("content") or "").strip(),
                 "score": r.get("score", 0),
                 "published_date": r.get("published_date", ""),
                 "query": query,
@@ -182,3 +178,20 @@ def search_alcohol_news(region: str = "thai") -> list[dict]:
     print(f"  → Tavily [{region}] returned {len(ranked)} items {window}{thai_tag} "
           f"({n_news} news, {n_art} articles, {len(seen)} already published)")
     return ranked
+
+
+def fetch_full(url: str) -> str:
+    """Fetch full page text for ONE url (the chosen story), to enrich the FB
+    post. Uses Tavily extract — one cheap call instead of raw_content on every
+    search result. Returns '' on failure."""
+    if not url or not config.TAVILY_API_KEY:
+        return ""
+    try:
+        client = TavilyClient(api_key=config.TAVILY_API_KEY)
+        resp = client.extract([url], extract_depth="basic")
+        results = resp.get("results", [])
+        if results:
+            return (results[0].get("raw_content") or "").strip()
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! Tavily extract failed: {exc}")
+    return ""
