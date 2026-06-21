@@ -60,11 +60,26 @@ INTL_ARTICLE_QUERIES = [
     "alcohol and society public health feature article",
 ]
 
+# Alcohol-free funerals (งานศพปลอดเหล้า) + the problems alcohol causes at funerals.
+FUNERAL_NEWS_QUERIES = [
+    "งานศพปลอดเหล้า ชุมชน วัด ต้นแบบ",
+    "งดเหล้าในงานศพ รณรงค์ สสส.",
+    "งานศพ สิ้นเปลือง เป็นหนี้ ยืมเงิน ค่าเหล้า",
+    "ค่าใช้จ่ายงานศพ เหล้า สุรา ภาระครอบครัว",
+]
+FUNERAL_ARTICLE_QUERIES = [
+    "บทความ งานศพปลอดเหล้า ประโยชน์ วิธีจัด",
+    "งานศพปลอดเหล้า ตัวอย่าง ครอบครัว ชุมชน ไทย",
+    "ปัญหา งานศพ จัดใหญ่ สิ้นเปลือง หนี้สิน เหล้า",
+]
 
-def _queries_for(region: str) -> tuple[list[str], list[str]]:
-    """Return (news_queries, article_queries) for 'thai' or 'intl'."""
-    if region == "intl":
+
+def _queries_for(profile: str) -> tuple[list[str], list[str]]:
+    """Return (news_queries, article_queries) for a profile."""
+    if profile == "intl":
         return INTL_NEWS_QUERIES, INTL_ARTICLE_QUERIES
+    if profile == "funeral":
+        return FUNERAL_NEWS_QUERIES, FUNERAL_ARTICLE_QUERIES
     return THAI_NEWS_QUERIES, THAI_ARTICLE_QUERIES
 
 

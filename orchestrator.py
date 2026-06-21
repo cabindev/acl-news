@@ -18,15 +18,34 @@ from tools.deliver import approve_and_publish
 from tools.search import search_alcohol_news
 from tools.summarize import compose_fb_post, summarize_articles
 
-_RULES_PATH = Path(__file__).resolve().parent / "RULES.md"
+_ROOT = Path(__file__).resolve().parent
+
+# Per-profile editorial rules file (the "editorial board" for that topic).
+_RULES_FILES = {
+    "funeral": "RULES_funeral.md",
+}
 
 
-def _load_rules() -> str:
-    """Editorial policy that gates story selection — editable without code changes."""
+def _load_rules(profile: str = "thai") -> str:
+    """Editorial policy for the profile — editable without code changes."""
+    path = _ROOT / _RULES_FILES.get(profile, "RULES.md")
     try:
-        return _RULES_PATH.read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8").strip()
     except Exception:
         return ""
+
+
+def _scope_directive(profile: str) -> str:
+    """Per-run scope appended to the system prompt."""
+    if profile == "intl":
+        scope = "ข่าว/บทความต่างประเทศ (ทั่วโลก ไม่ใช่ข่าวไทย)"
+    elif profile == "funeral":
+        scope = ("เฉพาะหัวข้อ \"งานศพปลอดเหล้า\" หรือปัญหาการจัดงานศพที่เกี่ยวกับเหล้า "
+                 "(จ่ายแพง/เป็นหนี้/สิ้นเปลือง) ในไทย")
+    else:
+        scope = "ข่าว/บทความในประเทศไทย หรือประเด็นที่เกี่ยวข้องกับไทยโดยตรง"
+    return (f"\n\n=== ขอบเขตรอบนี้ ===\nรอบนี้ให้เลือกเฉพาะ \"{scope}\" เท่านั้น "
+            f"ห้ามเลือกชิ้นที่อยู่นอกขอบเขตนี้")
 
 SYSTEM = """คุณคือ "กองบรรณาธิการบริหาร" ของเพจ CivicSpace ดูแลคอนเทนต์ข่าวแอลกอฮอล์
 ทำงานตามขั้นตอนนี้โดยใช้ tools ที่มีให้:
@@ -43,7 +62,10 @@ SYSTEM = """คุณคือ "กองบรรณาธิการบริ
    - editor_note: เหตุผลเชิงบรรณาธิการที่อนุมัติข่าวนี้ สั้นๆ 1 ประโยค
    (ระบบจะร่างโพสต์เฟซบุ๊กฉบับเต็มจากข่าว แล้วแนบที่มาและ #CivicSpace ให้อัตโนมัติ)
 
-เรียก approve_and_publish เพียงครั้งเดียว และทำให้ครบทุกขั้นตอน"""
+**สำคัญ:** ถ้าไม่มีชิ้นใดตรงพันธกิจและขอบเขตของรอบนี้จริงๆ **ห้ามฝืนเลือก** ให้เรียก skip_publication
+พร้อมเหตุผลแทน — การไม่เผยแพร่ดีกว่าเผยแพร่เนื้อหาที่หลุดหัวข้อ
+
+เรียก approve_and_publish หรือ skip_publication อย่างใดอย่างหนึ่งเพียงครั้งเดียว และทำให้ครบทุกขั้นตอน"""
 
 _FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
@@ -67,6 +89,17 @@ _FUNCTION_DECLARATIONS = [
                 "editor_note": types.Schema(type="STRING", description="เหตุผลเชิงบรรณาธิการที่อนุมัติ สั้นๆ"),
             },
             required=["chosen_index", "headline"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="skip_publication",
+        description="ข้ามรอบนี้โดยไม่เผยแพร่ เมื่อไม่มีชิ้นใดตรงพันธกิจ/ขอบเขตจริงๆ — เรียกแทน approve_and_publish",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "reason": types.Schema(type="STRING", description="เหตุผลที่ไม่มีชิ้นที่เหมาะสม"),
+            },
+            required=["reason"],
         ),
     ),
 ]
@@ -101,6 +134,12 @@ def _dispatch(name: str, args: dict, state: State) -> str:
         ]
         return json.dumps(compact, ensure_ascii=False)
 
+    if name == "skip_publication":
+        if state.result:
+            return json.dumps({"status": "already_done"}, ensure_ascii=False)
+        state.result = {"skipped": True, "reason": args.get("reason", "")}
+        return json.dumps({"status": "skipped"}, ensure_ascii=False)
+
     if name == "approve_and_publish":
         # Guard: only publish once
         if state.result:
@@ -126,16 +165,10 @@ def _dispatch(name: str, args: dict, state: State) -> str:
 def run(region: str = "thai") -> dict:
     client = genai.Client(api_key=config.GOOGLE_API_KEY)
     state = State(region)
-    rules = _load_rules()
+    rules = _load_rules(region)
 
-    scope = ("ต่างประเทศ (ทั่วโลก ไม่ใช่ข่าวไทย)" if region == "intl"
-             else "ในประเทศไทย หรือประเด็นที่เกี่ยวข้องกับไทยโดยตรง")
-    scope_directive = (
-        f"\n\n=== ขอบเขตรอบนี้ ===\nรอบนี้ให้เลือกเฉพาะ \"ข่าว/บทความ{scope}\" เท่านั้น "
-        f"ห้ามเลือกชิ้นที่อยู่นอกขอบเขตนี้"
-    )
     system = (f"{SYSTEM}\n\n=== กฎกองบรรณาธิการ (ต้องปฏิบัติตาม) ===\n{rules}"
-              if rules else SYSTEM) + scope_directive
+              if rules else SYSTEM) + _scope_directive(region)
 
     tool = types.Tool(function_declarations=_FUNCTION_DECLARATIONS)
     cfg = types.GenerateContentConfig(

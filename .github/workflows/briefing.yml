@@ -4,10 +4,11 @@ on:
   schedule:
     - cron: "0 23 * * *"   # 06:00 Asia/Bangkok → ข่าวต่างประเทศ (intl)
     - cron: "0 2 * * *"    # 09:00 Asia/Bangkok → ข่าวในไทย (thai)
+    - cron: "0 7 * * *"    # 14:00 Asia/Bangkok → งานศพปลอดเหล้า (funeral)
   workflow_dispatch:
     inputs:
       region:
-        description: "intl หรือ thai"
+        description: "intl, thai หรือ funeral"
         default: "thai"
 
 permissions:
@@ -36,6 +37,8 @@ jobs:
             echo "region=intl" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "0 2 * * *" ]; then
             echo "region=thai" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 7 * * *" ]; then
+            echo "region=funeral" >> "$GITHUB_OUTPUT"
           else
             echo "region=${{ github.event.inputs.region || 'thai' }}" >> "$GITHUB_OUTPUT"
           fi

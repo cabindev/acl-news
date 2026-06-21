@@ -28,16 +28,18 @@ def preflight() -> bool:
 
 
 def _region_from_args() -> str:
-    """Region scope from argv: 'intl' or 'thai' (default thai)."""
+    """Profile from argv: 'intl', 'thai', or 'funeral' (default thai)."""
     arg = (sys.argv[1].lower() if len(sys.argv) > 1 else "thai")
     if arg in ("intl", "international", "global", "world"):
         return "intl"
+    if arg in ("funeral", "funerals"):
+        return "funeral"
     return "thai"
 
 
 def main() -> int:
     region = _region_from_args()
-    label = "ต่างประเทศ" if region == "intl" else "ในไทย"
+    label = {"intl": "ต่างประเทศ", "funeral": "งานศพปลอดเหล้า"}.get(region, "ในไทย")
     print("=" * 56)
     print(f"  🍺  ALCOHOL BRIEFING — ข่าว{label} [{region}]")
     print("=" * 56)
@@ -55,6 +57,11 @@ def main() -> int:
         return 2
 
     print("\n" + "=" * 56)
+    if result.get("skipped"):
+        print("  ⏭  SKIPPED — ไม่เผยแพร่รอบนี้")
+        print(f"  เหตุผล: {result.get('reason', '')}")
+        print("=" * 56)
+        return 0
     print("  ✓ APPROVED FOR FACEBOOK")
     briefing = result.get("briefing", {})
     story = briefing.get("story", {})
