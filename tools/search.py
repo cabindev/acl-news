@@ -1,6 +1,7 @@
 """Tavily search — Thai + English, news + feature articles, run in parallel."""
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -11,6 +12,16 @@ import config
 from tools.history import load_published_urls
 
 MAX_AGE_DAYS = config.MAX_AGE_DAYS
+
+# Profiles restricted to Thai-language sources only.
+THAI_ONLY_PROFILES = {"funeral"}
+# Profiles that use evergreen content (topic=general, no ≤7-day limit).
+EVERGREEN_PROFILES = {"funeral"}
+_THAI_RE = re.compile(r"[฀-๿]")
+
+
+def _has_thai(text: str) -> bool:
+    return bool(_THAI_RE.search(text or ""))
 
 
 def _within_max_age(published_date: str) -> bool:
@@ -84,10 +95,10 @@ def _queries_for(profile: str) -> tuple[list[str], list[str]]:
 
 
 def _search_one(client: TavilyClient, query: str, kind: str,
-                days: int | None) -> list[dict]:
-    # Use topic="news" everywhere so results carry published_date and are
-    # recency-constrained; `kind` just tags news vs feature/article intent.
-    params = dict(query=query, search_depth="advanced", topic="news",
+                topic: str, days: int | None) -> list[dict]:
+    # topic="news" → carries published_date + recency-constrained (intl/thai);
+    # topic="general" → evergreen results for awareness topics (funeral).
+    params = dict(query=query, search_depth="advanced", topic=topic,
                   max_results=config.MAX_RESULTS_PER_QUERY,
                   include_raw_content=True)
     if days is not None:
@@ -127,20 +138,30 @@ def search_alcohol_news(region: str = "thai") -> list[dict]:
         raise RuntimeError("TAVILY_API_KEY is not set")
 
     news_queries, article_queries = _queries_for(region)
+    evergreen = region in EVERGREEN_PROFILES
+    thai_only = region in THAI_ONLY_PROFILES
+    topic = "general" if evergreen else "news"
+    days = None if evergreen else MAX_AGE_DAYS
+
     client = TavilyClient(api_key=config.TAVILY_API_KEY)
-    # (query, kind, days) — every query is recency-constrained.
-    jobs = [(q, "news", MAX_AGE_DAYS) for q in news_queries] + \
-           [(q, "article", MAX_AGE_DAYS) for q in article_queries]
+    # (query, kind, topic, days)
+    jobs = [(q, "news", topic, days) for q in news_queries] + \
+           [(q, "article", topic, days) for q in article_queries]
 
     articles: list[dict] = []
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         for batch in pool.map(lambda j: _search_one(client, *j), jobs):
             articles.extend(batch)
 
-    # Dedupe by URL (keep highest score). Age filter applies to everything.
+    # Dedupe by URL (keep highest score). Age filter applies to non-evergreen.
+    # Thai-only profiles also drop items with no Thai text in the title/content.
     by_url: dict[str, dict] = {}
     for a in articles:
-        if not a["url"] or not _within_max_age(a.get("published_date", "")):
+        if not a["url"]:
+            continue
+        if not evergreen and not _within_max_age(a.get("published_date", "")):
+            continue
+        if thai_only and not (_has_thai(a.get("title", "")) or _has_thai(a.get("content", "")[:400])):
             continue
         prev = by_url.get(a["url"])
         if prev is None or a["score"] > prev["score"]:
@@ -156,6 +177,8 @@ def search_alcohol_news(region: str = "thai") -> list[dict]:
 
     n_news = sum(1 for a in ranked if a["kind"] == "news")
     n_art = len(ranked) - n_news
-    print(f"  → Tavily [{region}] returned {len(ranked)} items ≤{MAX_AGE_DAYS}d "
+    window = "evergreen" if evergreen else f"≤{MAX_AGE_DAYS}d"
+    thai_tag = " thai-only" if thai_only else ""
+    print(f"  → Tavily [{region}] returned {len(ranked)} items {window}{thai_tag} "
           f"({n_news} news, {n_art} articles, {len(seen)} already published)")
     return ranked
