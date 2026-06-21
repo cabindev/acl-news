@@ -1,0 +1,10 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+assets/logo.png
+
+# Ignore generated output, but keep the dedup-history state.
+output/*
+!output/published.json

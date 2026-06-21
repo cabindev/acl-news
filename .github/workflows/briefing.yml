@@ -1,0 +1,73 @@
+name: Alcohol Briefing
+
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 06:00 Asia/Bangkok → ข่าวต่างประเทศ (intl)
+    - cron: "0 2 * * *"    # 09:00 Asia/Bangkok → ข่าวในไทย (thai)
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "intl หรือ thai"
+        default: "thai"
+
+permissions:
+  contents: write   # ให้ commit published.json (กันข่าวซ้ำ) กลับ repo ได้
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Thai fonts (free, for card rendering)
+        run: sudo apt-get update && sudo apt-get install -y fonts-thai-tlwg fonts-noto-core
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pick region from schedule
+        id: pick
+        run: |
+          if [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then
+            echo "region=intl" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 2 * * *" ]; then
+            echo "region=thai" >> "$GITHUB_OUTPUT"
+          else
+            echo "region=${{ github.event.inputs.region || 'thai' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run briefing
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SHEET_WEBHOOK_URL: ${{ secrets.SHEET_WEBHOOK_URL }}
+          ORCHESTRATOR_MODEL: ${{ secrets.ORCHESTRATOR_MODEL }}
+          SUMMARIZER_MODEL: ${{ secrets.SUMMARIZER_MODEL }}
+          MAX_AGE_DAYS: ${{ secrets.MAX_AGE_DAYS }}
+        run: python main.py ${{ steps.pick.outputs.region }}
+
+      - name: Upload generated card & post
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing-${{ steps.pick.outputs.region }}
+          path: |
+            output/card-*.png
+            output/post-*.txt
+            output/briefing-*.md
+          if-no-files-found: ignore
+
+      - name: Persist dedup history
+        if: always()
+        run: |
+          git config user.name "briefing-bot"
+          git config user.email "briefing-bot@users.noreply.github.com"
+          git add output/published.json || true
+          git commit -m "chore: update published history [skip ci]" || echo "no changes"
+          git push || echo "nothing to push"
