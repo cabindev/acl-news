@@ -2,9 +2,10 @@ name: Alcohol Briefing
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 06:00 Asia/Bangkok → ข่าวต่างประเทศ (intl)
-    - cron: "0 2 * * *"    # 09:00 Asia/Bangkok → ข่าวในไทย (thai)
-    - cron: "0 7 * * *"    # 14:00 Asia/Bangkok → งานศพปลอดเหล้า (funeral)
+    # สัปดาห์ละครั้ง ทุกวันจันทร์ (เวลาไทย) — UTC+7
+    - cron: "0 23 * * 0"   # จันทร์ 06:00 Asia/Bangkok → ข่าวต่างประเทศ (intl)  [อาทิตย์ 23:00 UTC]
+    - cron: "0 2 * * 1"    # จันทร์ 09:00 Asia/Bangkok → ข่าวในไทย (thai)        [จันทร์ 02:00 UTC]
+    - cron: "0 7 * * 1"    # จันทร์ 14:00 Asia/Bangkok → งานศพปลอดเหล้า (funeral) [จันทร์ 07:00 UTC]
   workflow_dispatch:
     inputs:
       region:
@@ -33,11 +34,11 @@ jobs:
       - name: Pick region from schedule
         id: pick
         run: |
-          if [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then
+          if [ "${{ github.event.schedule }}" = "0 23 * * 0" ]; then
             echo "region=intl" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 2 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 2 * * 1" ]; then
             echo "region=thai" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 7 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 7 * * 1" ]; then
             echo "region=funeral" >> "$GITHUB_OUTPUT"
           else
             echo "region=${{ github.event.inputs.region || 'thai' }}" >> "$GITHUB_OUTPUT"
@@ -53,6 +54,7 @@ jobs:
           ORCHESTRATOR_MODEL: ${{ secrets.ORCHESTRATOR_MODEL }}
           SUMMARIZER_MODEL: ${{ secrets.SUMMARIZER_MODEL }}
           MAX_AGE_DAYS: ${{ secrets.MAX_AGE_DAYS }}
+          EVERGREEN_MAX_AGE_DAYS: ${{ secrets.EVERGREEN_MAX_AGE_DAYS }}
         run: python main.py ${{ steps.pick.outputs.region }}
 
       - name: Upload generated card & post

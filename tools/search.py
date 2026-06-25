@@ -24,9 +24,9 @@ def _has_thai(text: str) -> bool:
     return bool(_THAI_RE.search(text or ""))
 
 
-def _within_max_age(published_date: str) -> bool:
-    """True if published within MAX_AGE_DAYS. Unparseable/empty dates pass
-    (Tavily already constrains by days=7; this is a best-effort safety net)."""
+def _within_max_age(published_date: str, max_days: int = MAX_AGE_DAYS) -> bool:
+    """True if published within `max_days`. Unparseable/empty dates pass
+    (Tavily already constrains news by days; this is a best-effort safety net)."""
     if not published_date:
         return True
     dt = None
@@ -41,7 +41,7 @@ def _within_max_age(published_date: str) -> bool:
         return True
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt >= datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)
+    return dt >= datetime.now(timezone.utc) - timedelta(days=max_days)
 
 # ── Query sets per region ─────────────────────────────────────────────────────
 # Thailand-focused.
@@ -149,13 +149,16 @@ def search_alcohol_news(region: str = "thai") -> list[dict]:
         for batch in pool.map(lambda j: _search_one(client, *j), jobs):
             articles.extend(batch)
 
-    # Dedupe by URL (keep highest score). Age filter applies to non-evergreen.
+    # Dedupe by URL (keep highest score). Both windows cap how old an item may
+    # be: ≤MAX_AGE_DAYS for news profiles, ≤EVERGREEN_MAX_AGE_DAYS for evergreen
+    # ones (so years-old feature pages don't leak through).
     # Thai-only profiles also drop items with no Thai text in the title/content.
+    age_cap = config.EVERGREEN_MAX_AGE_DAYS if evergreen else MAX_AGE_DAYS
     by_url: dict[str, dict] = {}
     for a in articles:
         if not a["url"]:
             continue
-        if not evergreen and not _within_max_age(a.get("published_date", "")):
+        if not _within_max_age(a.get("published_date", ""), age_cap):
             continue
         if thai_only and not (_has_thai(a.get("title", "")) or _has_thai(a.get("content", "")[:400])):
             continue
@@ -173,7 +176,7 @@ def search_alcohol_news(region: str = "thai") -> list[dict]:
 
     n_news = sum(1 for a in ranked if a["kind"] == "news")
     n_art = len(ranked) - n_news
-    window = "evergreen" if evergreen else f"≤{MAX_AGE_DAYS}d"
+    window = f"≤{age_cap}d" + (" evergreen" if evergreen else "")
     thai_tag = " thai-only" if thai_only else ""
     print(f"  → Tavily [{region}] returned {len(ranked)} items {window}{thai_tag} "
           f"({n_news} news, {n_art} articles, {len(seen)} already published)")

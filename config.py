@@ -23,6 +23,9 @@ SUMMARIZER_MODEL = (os.getenv("SUMMARIZER_MODEL") or "gemini-2.5-flash").strip()
 MAX_RESULTS_PER_QUERY = int(os.getenv("MAX_RESULTS_PER_QUERY") or "8")
 TOP_N = int(os.getenv("TOP_N") or "5")
 MAX_AGE_DAYS = int(os.getenv("MAX_AGE_DAYS") or "7")   # only use news ≤ this many days old
+# Evergreen profiles (e.g. funeral) keep older feature content, but still cap it
+# so years-old pages (e.g. 2567/2024) don't leak through. ~1 year by default.
+EVERGREEN_MAX_AGE_DAYS = int(os.getenv("EVERGREEN_MAX_AGE_DAYS") or "365")
 
 # --- Paths ---
 ASSETS_DIR = ROOT / "assets"
