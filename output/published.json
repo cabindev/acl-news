@@ -1,20 +1,5 @@
 [
   {
-    "url": "https://www.upr.org/utah-news/2026-07-02/drunk-driving-deaths-blood-alcohol-concentration-limit",
-    "headline": "ยูทาห์ลดแอลกอฮอล์ในเลือด ช่วยลดคนตายบนถนน",
-    "published_at": "2026-07-06T00:14:25.265646+00:00"
-  },
-  {
-    "url": "https://www.cbsnews.com/news/boy-driving-crashes-monks-deaths-injuries-thailand/",
-    "headline": "เด็ก 11 ขับรถชนพระดับ 8",
-    "published_at": "2026-07-06T06:20:57.548422+00:00"
-  },
-  {
-    "url": "https://www.khaosod.co.th/around-thailand/news_10303398",
-    "headline": "หนองซนโมเดล: งานศพปลอดเหล้าสู่ชุมชนปลอดภัย",
-    "published_at": "2026-07-06T11:19:20.868776+00:00"
-  },
-  {
     "url": "https://www.newsweek.com/scientists-expected-one-result-from-alcohol-and-alzheimers-they-found-another-12177246",
     "headline": "แอลกอฮอล์กับอัลไซเมอร์: ผลวิจัยพลิกความคาดหมาย",
     "published_at": "2026-07-13T00:02:53.812908+00:00"
@@ -103,5 +88,10 @@
     "url": "https://www.bangkokbiznews.com/health/social/1198232",
     "headline": "งานศพปลอดเหล้า ประหยัด 3 หมื่น!",
     "published_at": "2026-08-17T07:41:01.911091+00:00"
+  },
+  {
+    "url": "http://www.sciencedaily.com/releases/2026/08/260822015148.htm",
+    "headline": "เลิกเหล้าเสี่ยงสมองอยากดื่มซ้ำ",
+    "published_at": "2026-08-23T23:28:52.611880+00:00"
   }
 ]
